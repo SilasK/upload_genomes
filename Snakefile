@@ -18,7 +18,7 @@ checkpoint create_bach_tables:
         chunksize = 100
     run:
         import pandas as pd
-        with pd.read_table(input[0], chunksize=params.chunksize) as reader:
+        with pd.read_table(input[0], chunksize=params.chunksize,index_col=0) as reader:
             for i,chunk in enumerate(reader):
 
                 batch_dir= Path(output[0])/f"batch{i:000d}"
@@ -49,6 +49,7 @@ rule create_manifests_batch:
         " {params.extra} "
         " {params.is_mag} "
         "  --force "
+        " --live "
         " &> {log} "
 
 
