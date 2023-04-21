@@ -27,28 +27,28 @@ checkpoint create_bach_tables:
 
                 chunk.to_csv(batch_dir/"genome_table.tsv",sep='\t')
 
-
-
+wildcard_constraints:
+    genome_type= "(MAG|bin)"
 
 rule create_manifests_batch:
     input:
         table= "Batches/batch{batch}/genome_table.tsv",
         script= snakemake_dir/"scripts/genome_upload.py"
     output:
-        directory("Batches/batch{batch}/MAG_upload")
+        directory("Batches/batch{batch}/{genome_type}_upload")
     params:
         outdir= lambda wc, output: Path(output[0]).parent,
         extra= "-u {bioproject}  --centre_name '{center}' --webin '{webin_user}' --password '{webin_password}' ".format(**config),
-        is_mag = "--mags" if bool(config["is_mag"]) else "--bins"
+        genome_type = lambda wc: f"--{wc.genome_type.lower()}s"
     log:
-        "log/create_manifest/batch{batch}.log"
+        "log/create_manifest/batch{batch}_{genome_type}.log"
     shell:
         "python {input.script} "
         " --genome_info {input.table} "
         " --out {params.outdir} "
         " {params.extra} "
-        " {params.is_mag} "
-        "  --force "
+        " {params.genome_type} "
+#        "  --force "
         " --live "
         " &> {log} "
 
@@ -61,19 +61,20 @@ def get_manifest_input(wildcards):
 
 
 
-rule validate:
+
+rule submit:
     input:
-        dir= "Batches/batch{batch}/MAG_upload",
-        script= snakemake_dir/"scripts/webin-cli-5.2.0.jar"
+        dir= "Batches/batch{{batch}}/{genome_type}_upload".format(**config),
+        script= snakemake_dir/"scripts/webin-cli-6.2.0.jar"
     output:
-        touch("Batches/batch{batch}/manifest_validated")
+        touch("Batches/batch{batch}/manifest_submitted")
     params:
         outdir= lambda wc, output: Path(output[0]).parent,
         proxy = " -Dhttps.proxyHost=204.79.90.44 -Dhttps.proxyPort=8080",
         extra = " -username {webin_user} -password '{webin_password}' -centername '{center}' ".format(**config)
                 
     log:
-        "log/validate/batch{batch}.log"
+        "log/submit/batch{batch}.log"
     shell:
         " set -x \n"
         "(\n"
@@ -84,7 +85,7 @@ rule validate:
         " -context genome "
         " -manifest $manifest "
         " -outputdir {params.outdir} "
-        " -validate "
+        " -submit "
         "\ndone\n"
         ") &> {log} "
 
@@ -145,7 +146,7 @@ def get_all_manifests(wildcards):
 
     all_batches = get_all_batches(wildcards)
 
-    return expand(rules.validate.output[0],batch=all_batches)
+    return expand(rules.submit.output[0],batch=all_batches)
 
 
 
